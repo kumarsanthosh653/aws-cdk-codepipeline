@@ -1,0 +1,41 @@
+# stack name: costengine-web-waf-${STAGE}
+# Should be created in region us-east-1, since its a wafv2
+AWSTemplateFormatVersion: "2010-09-09"
+Description: WAF for Cost Engine Web UI CloudFront Dist
+Resources:
+  CostEngineWAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: "CostEngineWAFWebACL"
+      Scope: CLOUDFRONT
+      Description: "wafv2 managed and other rules for costengine-web portal react app"
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: "CostEngineWafWebACLMetric"
+      Tags:
+        - Key: Application
+          Value: CostEngine
+      Rules:
+        - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 0
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CostEngineCFWafWebACLKnownBadInputs
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+
+Outputs:
+  WafWebACLId:
+    Description: ID of the WAF Web ACL
+    Value: !GetAtt CostEngineWAFWebACL.Id
+  WafWebACLArn:
+    Description: Arn of the WAF Web ACL
+    Value: !GetAtt CostEngineWAFWebACL.Arn
