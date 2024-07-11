@@ -70,7 +70,7 @@ phases:
       - cdk deploy --require-approval never
       
       - echo Copying file to S3 bucket
-      - aws s3 cp ./cdk.out/ s3://cdk-stack-report-buildspec/test/ --region $AWS_DEFAULT_REGION
+      - aws s3 cp cdk.out s3://cdk-stack-report-buildspec/test/ --recursive --region $AWS_DEFAULT_REGION
 
 
 artifacts:
