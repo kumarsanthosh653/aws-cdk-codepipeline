@@ -1,0 +1,78 @@
+version: 0.2
+env:
+  variables:
+    AWS_ACCOUNT_ID: "637423476845"
+    AWS_DEFAULT_REGION: "ap-south-1"
+  secrets-manager:
+    AWS_ACCESS_KEY_ID: "arn:aws:secretsmanager:ap-south-1:637423476845:secret:access-keys-zwiv9K:AWS_ACCESS_KEY_ID"
+    AWS_SECRET_ACCESS_KEY: "arn:aws:secretsmanager:ap-south-1:637423476845:secret:access-keys-zwiv9K:AWS_SECRET_ACCESS_KEY"
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - echo Installing Node.js and npm
+      - curl -sL https://rpm.nodesource.com/setup_20.x | sudo bash -
+      - sudo dnf install -y nodejs
+
+  pre_build:
+    commands:
+      - echo Verifying Node.js and npm installation
+      - node -v
+      - npm -v
+
+      - echo Installing TypeScript
+      - sudo npm install -g typescript
+
+      - echo Installing specific version of npm
+      - sudo npm install -g npm@10.8.2
+
+      - echo Updating TypeScript
+      - sudo npm update -g typescript
+
+      - echo Checking npm version
+      - npm -version
+
+      - echo Installing AWS CDK
+      - sudo npm install -g aws-cdk
+
+      - echo Configuring AWS CLI
+      - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+      - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+      - aws configure set default.region $AWS_DEFAULT_REGION
+
+  build:
+    commands:
+      - echo Creating project directory
+      - mkdir my-cdk-app
+      - cd my-cdk-app
+
+      - echo Initializing CDK app
+      - cdk init app --language typescript
+
+      - echo Removing existing bin and lib folders
+      - rm -rf bin lib
+
+      - echo Copying bin and lib folders
+      - cp -R ../cdk-test/* .
+
+      - echo Updating TypeScript
+      - sudo npm update -g typescript
+
+      - echo Synthesizing CloudFormation template
+      - cdk synth
+
+      - echo Bootstrapping AWS environment
+      - cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_DEFAULT_REGION
+
+      - echo Deploying CDK app with auto approve
+      - cdk deploy --require-approval never
+      
+      - echo Copying file to S3 bucket
+      - aws s3 cp cdk.out s3://cdk-stack-report-buildspec/test/ --recursive --region $AWS_DEFAULT_REGION
+
+
+artifacts:
+  files:
+    - '**/*'
