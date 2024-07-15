@@ -1,0 +1,93 @@
+version: 0.2
+ 
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - echo [cargotrack-services] install global npm dependencies
+      - npm i -g mocha && npm i --legacy-peer-deps
+  pre_build:
+    commands:
+      - echo SLS_DEBUG set to $SLS_DEBUG
+      - echo SLS_IGNORE_WARNING set to $SLS_IGNORE_WARNING
+      #- echo running security dependency vulnerability tests...
+      #- $SNYK_TEST
+      #- $SNYK_MONITOR
+      - echo [cargotrack-services] getting deploy role SSM param
+      # - yum install epel-release -y
+      - apt install jq -y
+      - param_name=/cargotrack/$STAGE/services/deploy/role
+      - echo the SSM param ${param_name}
+      - DEPLOY_ROLE=$(aws ssm get-parameter --name $param_name --with-decryption | jq ".Parameter.Value" | tr -d \")
+      - echo $DEPLOY_ROLE
+  build:
+    commands:
+      - echo [cargotrack-services] building cargotrack-services for $STAGE environment
+      - role=$(aws sts assume-role --role-arn $DEPLOY_ROLE --role-session-name cargotrack-services-deployer-session --duration-seconds $DURATION)
+      - echo $role
+      - KEY=$(echo $role | jq ".Credentials.AccessKeyId" --raw-output)
+      - SECRET=$(echo $role | jq ".Credentials.SecretAccessKey" --raw-output)
+      - TOKEN=$(echo $role | jq ".Credentials.SessionToken" --raw-output)
+      - export AWS_ACCESS_KEY_ID=$KEY
+      - export AWS_SECRET_ACCESS_KEY=$SECRET
+      - export AWS_SESSION_TOKEN=$TOKEN
+      - export AWS_DEFAULT_REGION=$AWS_REGION
+      - echo "running CDK deploy for APIs - cognito service infrastructure componet"
+      - cd aws/infra/ohana-cognito
+      - npm install
+      - npm run build:$STAGE
+      - echo "running CDK deploy for APIs - API gateway infrastructure componets"
+      - cd ../ohana-apigw
+      - npm install
+      - npx cdk deploy OhanaApigwStack-$STAGE
+      - echo "running CDK deploy for APIs - DynamoDB infrastructure componets"
+      - cd ../ohana-dynamodb
+      - npm ci
+      - npx cdk deploy DynamoDbCdkStack
+ 
+      #- echo "running mvn clean install for RefData API - NOT WORKING"
+      # - cd ../ohana-ref-api/ref-data 
+      # - mvn clean install
+ 
+      # - echo "running CDK deploy for APIs - RefData API infrastructure componets"
+      # - cd ../infra/cdk
+      - cd ../ohana-ref-api/infra/cdk
+      - npm install
+      - npx cdk deploy RefDataCdkStack-$STAGE --require-approval never
+      - cd ../../../../../
+      - echo "running serverless deploy for user services infrastructure componets (Cognito)"
+      - echo "installing user service dependencies"
+      - cd src/services/user
+      - npm i --legacy-peer-deps
+      - echo SLS version for user services
+      - npx sls -v --stage $STAGE
+      - echo running SERVERLESS DEPLOY FOR USER INFRA
+      - cd infra && npx sls deploy --stage $STAGE
+      - echo "running SERVERLESS DEPLOY FOR USER DIRECTORY SERVICES (registration/auth)"
+      - cd ../userdir && npx sls deploy --stage $STAGE
+      - echo "running SERVERLESS DEPLOY FOR USER MANAGEMENT SERVICES (admin/cp)"
+      - cd ../usermgmt && npx sls deploy --stage $STAGE
+      - cd ../../../../
+      - echo install root npm dependencies
+      - ls 
+      - pwd
+      - npm ci --legacy-peer-deps
+      - echo SLS version for user services
+      - npx sls -v --stage $STAGE
+      - echo running SERVERLESS DEPLOY FOR API SERVICE
+      - cd src/services/api && npx sls deploy --stage $STAGE
+      - echo running SERVERLESS DEPLOY FOR API EXTENSION SERVICE
+      - cd ../apiextension && npx sls deploy --stage $STAGE --force
+      - echo running SERVERLESS DEPLOY FOR ORIGAMI SERVICE
+      - cd ../origami && npx sls deploy --stage $STAGE
+      - echo running SERVERLESS DEPLOY FOR CARRIER SERVICE
+      - cd ../carrier && npx sls deploy --stage $STAGE
+      - echo running SERVERLESS DEPLOY FOR MONITOR SERVICE
+      - cd ../monitor && npx sls deploy --stage $STAGE
+      - echo [cargotrack-services] deploy complete!
+  post_build:
+    commands:
+      - echo Running tests...
+      - $TEST_CONDITION
+      - echo Done!
