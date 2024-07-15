@@ -12,7 +12,6 @@ phases:
     runtime-versions:
       nodejs: 20
     commands:
-      # - npm i -g mocha && npm i --legacy-peer-deps
       - echo Verifying Node.js and npm installation
       - node -v
       - npm -v
